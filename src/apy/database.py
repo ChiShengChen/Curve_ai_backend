@@ -93,6 +93,21 @@ class RebalanceAction(Base):
     executed_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
+class FundDeployment(Base):
+    """Record fund deployments initiated for a user."""
+
+    __tablename__ = "fund_deployments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, index=True, nullable=False)
+    strategy = Column(String, nullable=False)
+    risk_level = Column(String, nullable=False)
+    expected_apy = Column(Float, nullable=False)
+    tx_fee = Column(Float, default=0.0)
+    status = Column(String, default="pending")
+    executed_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 def init_db() -> None:
     """Create database tables if they do not exist."""
     Base.metadata.create_all(bind=engine)

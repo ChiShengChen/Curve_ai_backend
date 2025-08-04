@@ -13,6 +13,7 @@ from .database import (
     DepositTransaction,
     WithdrawalTransaction,
     RebalanceAction,
+    FundDeployment,
 )
 
 
@@ -249,6 +250,67 @@ def get_rebalance_actions(
         total = query.count()
         records = (
             query.order_by(RebalanceAction.executed_at.desc())
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
+        return records, total
+    finally:
+        session.close()
+
+
+def create_fund_deployment(
+    user_id: str,
+    strategy: str,
+    risk_level: str,
+    expected_apy: float,
+    tx_fee: float,
+    status: str,
+    executed_at: datetime | None = None,
+):
+    """Persist a fund deployment record for the given user."""
+
+    session: Session = SessionLocal()
+    try:
+        deployment = FundDeployment(
+            user_id=user_id,
+            strategy=strategy,
+            risk_level=risk_level,
+            expected_apy=expected_apy,
+            tx_fee=tx_fee,
+            status=status,
+            executed_at=executed_at or datetime.utcnow(),
+        )
+        session.add(deployment)
+        session.commit()
+        session.refresh(deployment)
+        return deployment
+    finally:
+        session.close()
+
+
+def get_fund_deployments(
+    user_id: str,
+    skip: int = 0,
+    limit: int = 10,
+    status: str | None = None,
+    strategy: str | None = None,
+    risk_level: str | None = None,
+) -> Tuple[List[FundDeployment], int]:
+    """Retrieve paginated fund deployments for a user with optional filters."""
+
+    session: Session = SessionLocal()
+    try:
+        query = session.query(FundDeployment).filter(FundDeployment.user_id == user_id)
+        if status:
+            query = query.filter(FundDeployment.status == status)
+        if strategy:
+            query = query.filter(FundDeployment.strategy == strategy)
+        if risk_level:
+            query = query.filter(FundDeployment.risk_level == risk_level)
+        total = query.count()
+        records = (
+            query.order_by(FundDeployment.executed_at.desc())
             .offset(skip)
             .limit(limit)
             .all()

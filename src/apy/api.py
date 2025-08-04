@@ -17,6 +17,7 @@ from .services import (
     create_withdrawal_transaction,
     get_withdrawal_transactions,
     get_rebalance_actions,
+    get_fund_deployments,
 )
 
 
@@ -143,6 +144,29 @@ class RebalanceListResponse(BaseModel):
 
     total: int
     items: List[RebalanceActionResponse]
+
+
+class DeploymentResponse(BaseModel):
+    """Serialized fund deployment."""
+
+    id: int
+    user_id: str
+    strategy: str
+    risk_level: str
+    expected_apy: float
+    tx_fee: float
+    status: str
+    executed_at: datetime
+
+    class Config:
+        orm_mode = True
+
+
+class DeploymentListResponse(BaseModel):
+    """Paginated list of fund deployments."""
+
+    total: int
+    items: List[DeploymentResponse]
 
 
 class EarningsRequest(BaseModel):
@@ -288,6 +312,28 @@ def get_user_withdrawals(user_id: str, skip: int = 0, limit: int = 10):
 
     records, total = get_withdrawal_transactions(user_id, skip, limit)
     return WithdrawalListResponse(total=total, items=records)
+
+
+@app.get("/users/{user_id}/deployments", response_model=DeploymentListResponse)
+def get_user_deployments(
+    user_id: str,
+    skip: int = 0,
+    limit: int = 10,
+    status: str | None = None,
+    strategy: str | None = None,
+    risk_level: str | None = None,
+):
+    """Return paginated fund deployments for the user with optional filters."""
+
+    records, total = get_fund_deployments(
+        user_id,
+        skip=skip,
+        limit=limit,
+        status=status,
+        strategy=strategy,
+        risk_level=risk_level,
+    )
+    return DeploymentListResponse(total=total, items=records)
 
 
 @app.get("/users/{user_id}/rebalances", response_model=RebalanceListResponse)
