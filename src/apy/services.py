@@ -90,6 +90,68 @@ def calculate_total_earning(user_id: str, pool_id: str, amount: float) -> Dict[s
         session.close()
 
 
+def get_user_positions(user_id: str) -> Dict[str, object]:
+    """Aggregate a user's positions with projected earnings and APR.
+
+    Parameters
+    ----------
+    user_id: str
+        Identifier of the user.
+
+    Returns
+    -------
+    dict
+        Summary containing per-pool positions and overall totals.
+    """
+    session: Session = SessionLocal()
+    try:
+        positions = (
+            session.query(UserPosition)
+            .filter(UserPosition.user_id == user_id)
+            .all()
+        )
+
+        items: List[Dict[str, float]] = []
+        total_amount = 0.0
+        total_earning = 0.0
+
+        for pos in positions:
+            avg_apy = (
+                session.query(func.avg(PoolMetric.apy))
+                .filter(PoolMetric.pool_id == pos.pool_id)
+                .scalar()
+            ) or 0.0
+            projected = pos.amount * (avg_apy / 100)
+
+            latest = (
+                session.query(PoolMetric)
+                .filter(PoolMetric.pool_id == pos.pool_id)
+                .order_by(PoolMetric.recorded_at.desc())
+                .first()
+            )
+            current_apr = latest.apy if latest and latest.apy is not None else 0.0
+
+            items.append(
+                {
+                    "pool_id": pos.pool_id,
+                    "amount": pos.amount,
+                    "projected_earning": projected,
+                    "current_apr": current_apr,
+                }
+            )
+            total_amount += pos.amount
+            total_earning += projected
+
+        return {
+            "user_id": user_id,
+            "total_amount": total_amount,
+            "total_projected_earning": total_earning,
+            "positions": items,
+        }
+    finally:
+        session.close()
+
+
 def create_deposit_transaction(
     user_id: str,
     amount: float,
