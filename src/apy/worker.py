@@ -2,17 +2,19 @@
 
 from celery import Celery
 
+from .config import settings
+
+
 celery_app = Celery(
     "apy",
-    broker="redis://localhost:6379/0",
-    backend="redis://localhost:6379/0",
+    broker=settings.redis_url,
+    backend=settings.redis_url,
 )
 
 celery_app.conf.beat_schedule = {
     "fetch-pool-metrics": {
         "task": "apy.tasks.fetch_all_pool_metrics",
-        # every 8 hours
-        "schedule": 60 * 60 * 8,
+        "schedule": settings.schedule_frequency,
     }
 }
 celery_app.conf.timezone = "UTC"

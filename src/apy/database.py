@@ -1,13 +1,13 @@
 """Database setup for storing pool metrics."""
 
-import os
 from datetime import datetime
 from sqlalchemy import create_engine, Column, Integer, Float, String, DateTime
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///curve.db")
+from .config import settings
 
-engine = create_engine(DATABASE_URL, future=True)
+
+engine = create_engine(settings.database_url, future=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 Base = declarative_base()
 
