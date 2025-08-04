@@ -12,6 +12,7 @@ from .database import (
     UserPosition,
     DepositTransaction,
     WithdrawalTransaction,
+    RebalanceAction,
 )
 
 
@@ -188,6 +189,66 @@ def get_withdrawal_transactions(
         total = query.count()
         records = (
             query.order_by(WithdrawalTransaction.recorded_at.desc())
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
+        return records, total
+    finally:
+        session.close()
+
+
+def create_rebalance_action(
+    user_id: str,
+    old_pool: str,
+    new_pool: str,
+    old_apy: float,
+    new_apy: float,
+    strategy: str,
+    action_type: str,
+    moved_amount: float,
+    asset_type: str,
+    new_allocation: float,
+    gas_cost: float,
+    executed_at: datetime | None = None,
+):
+    """Persist a new rebalance action for the given user."""
+
+    session: Session = SessionLocal()
+    try:
+        action = RebalanceAction(
+            user_id=user_id,
+            old_pool=old_pool,
+            new_pool=new_pool,
+            old_apy=old_apy,
+            new_apy=new_apy,
+            strategy=strategy,
+            action_type=action_type,
+            moved_amount=moved_amount,
+            asset_type=asset_type,
+            new_allocation=new_allocation,
+            gas_cost=gas_cost,
+            executed_at=executed_at or datetime.utcnow(),
+        )
+        session.add(action)
+        session.commit()
+        session.refresh(action)
+        return action
+    finally:
+        session.close()
+
+
+def get_rebalance_actions(
+    user_id: str, skip: int = 0, limit: int = 10
+) -> Tuple[List[RebalanceAction], int]:
+    """Retrieve paginated rebalance actions for a user."""
+
+    session: Session = SessionLocal()
+    try:
+        query = session.query(RebalanceAction).filter(RebalanceAction.user_id == user_id)
+        total = query.count()
+        records = (
+            query.order_by(RebalanceAction.executed_at.desc())
             .offset(skip)
             .limit(limit)
             .all()
