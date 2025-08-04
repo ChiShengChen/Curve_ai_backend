@@ -212,8 +212,8 @@ class DeploymentListResponse(BaseModel):
 class EarningsRequest(BaseModel):
     """Request body for calculating earnings for a deposit."""
 
-    pool_id: str
-    amount: float
+    pool_id: str = Field(..., description="Pool identifier")
+    amount: float = Field(..., description="Amount to deposit")
 
 
 def _get_metrics(session: Session, pool_id: str):
@@ -393,6 +393,6 @@ def get_user_risk_adjustments(user_id: str, skip: int = 0, limit: int = 10):
 
 
 @app.post("/users/{user_id}/earnings")
-def post_user_earnings(user_id: str, payload: EarningsRequest):
+def post_user_earnings(user_id: str, payload: EarningsRequest) -> Dict[str, float]:
     """Record a user's deposit and return projected earnings."""
     return calculate_total_earning(user_id, payload.pool_id, payload.amount)
