@@ -3,12 +3,13 @@
 from datetime import datetime, timedelta
 from typing import Dict, List
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 
 from pydantic import BaseModel, Field
 
 from sqlalchemy.orm import Session
 
+from .auth import verify_user
 from .database import SessionLocal, PoolMetric, init_db
 from .services import (
     calculate_total_earning,
@@ -351,7 +352,11 @@ def get_yield_sources(pool_id: str):
         session.close()
 
 
-@app.post("/users/{user_id}/deposits", response_model=DepositResponse)
+@app.post(
+    "/users/{user_id}/deposits",
+    response_model=DepositResponse,
+    dependencies=[Depends(verify_user)],
+)
 def post_user_deposit(user_id: str, payload: DepositRequest):
     """Record a new deposit transaction for the user."""
 
@@ -368,7 +373,11 @@ def post_user_deposit(user_id: str, payload: DepositRequest):
     )
 
 
-@app.get("/users/{user_id}/deposits", response_model=DepositListResponse)
+@app.get(
+    "/users/{user_id}/deposits",
+    response_model=DepositListResponse,
+    dependencies=[Depends(verify_user)],
+)
 def get_user_deposits(user_id: str, skip: int = 0, limit: int = 10):
     """Return paginated deposit transactions for the user."""
 
@@ -376,7 +385,11 @@ def get_user_deposits(user_id: str, skip: int = 0, limit: int = 10):
     return DepositListResponse(total=total, items=records)
 
 
-@app.post("/users/{user_id}/withdrawals", response_model=WithdrawalResponse)
+@app.post(
+    "/users/{user_id}/withdrawals",
+    response_model=WithdrawalResponse,
+    dependencies=[Depends(verify_user)],
+)
 def post_user_withdrawal(user_id: str, payload: WithdrawalRequest):
     """Record a new withdrawal transaction for the user."""
 
@@ -393,7 +406,11 @@ def post_user_withdrawal(user_id: str, payload: WithdrawalRequest):
     )
 
 
-@app.get("/users/{user_id}/withdrawals", response_model=WithdrawalListResponse)
+@app.get(
+    "/users/{user_id}/withdrawals",
+    response_model=WithdrawalListResponse,
+    dependencies=[Depends(verify_user)],
+)
 def get_user_withdrawals(user_id: str, skip: int = 0, limit: int = 10):
     """Return paginated withdrawal transactions for the user."""
 
@@ -401,7 +418,11 @@ def get_user_withdrawals(user_id: str, skip: int = 0, limit: int = 10):
     return WithdrawalListResponse(total=total, items=records)
 
 
-@app.post("/users/{user_id}/deployments", response_model=DeploymentResponse)
+@app.post(
+    "/users/{user_id}/deployments",
+    response_model=DeploymentResponse,
+    dependencies=[Depends(verify_user)],
+)
 def post_user_deployment(user_id: str, payload: DeploymentRequest):
     """Record a new fund deployment for the user."""
 
@@ -415,7 +436,11 @@ def post_user_deployment(user_id: str, payload: DeploymentRequest):
     )
 
 
-@app.get("/users/{user_id}/deployments", response_model=DeploymentListResponse)
+@app.get(
+    "/users/{user_id}/deployments",
+    response_model=DeploymentListResponse,
+    dependencies=[Depends(verify_user)],
+)
 def get_user_deployments(
     user_id: str,
     skip: int = 0,
@@ -437,14 +462,22 @@ def get_user_deployments(
     return DeploymentListResponse(total=total, items=records)
 
 
-@app.get("/users/{user_id}/positions", response_model=UserPositionsResponse)
+@app.get(
+    "/users/{user_id}/positions",
+    response_model=UserPositionsResponse,
+    dependencies=[Depends(verify_user)],
+)
 def get_user_positions_endpoint(user_id: str) -> UserPositionsResponse:
     """Return aggregated positions and earnings for the user."""
 
     return get_user_positions(user_id)
 
 
-@app.post("/users/{user_id}/rebalances", response_model=RebalanceActionResponse)
+@app.post(
+    "/users/{user_id}/rebalances",
+    response_model=RebalanceActionResponse,
+    dependencies=[Depends(verify_user)],
+)
 def post_user_rebalance(user_id: str, payload: RebalanceActionRequest):
     """Record a new rebalance action for the user."""
 
@@ -463,7 +496,11 @@ def post_user_rebalance(user_id: str, payload: RebalanceActionRequest):
     )
 
 
-@app.get("/users/{user_id}/rebalances", response_model=RebalanceListResponse)
+@app.get(
+    "/users/{user_id}/rebalances",
+    response_model=RebalanceListResponse,
+    dependencies=[Depends(verify_user)],
+)
 def get_user_rebalances(user_id: str, skip: int = 0, limit: int = 10):
     """Return paginated rebalance actions for the user."""
 
@@ -471,7 +508,11 @@ def get_user_rebalances(user_id: str, skip: int = 0, limit: int = 10):
     return RebalanceListResponse(total=total, items=records)
 
 
-@app.post("/users/{user_id}/risk-adjustments", response_model=RiskAdjustmentResponse)
+@app.post(
+    "/users/{user_id}/risk-adjustments",
+    response_model=RiskAdjustmentResponse,
+    dependencies=[Depends(verify_user)],
+)
 def post_user_risk_adjustment(user_id: str, payload: RiskAdjustmentRequest):
     """Record a new risk adjustment for the user."""
 
@@ -488,7 +529,11 @@ def post_user_risk_adjustment(user_id: str, payload: RiskAdjustmentRequest):
     )
 
 
-@app.get("/users/{user_id}/risk-adjustments", response_model=RiskAdjustmentListResponse)
+@app.get(
+    "/users/{user_id}/risk-adjustments",
+    response_model=RiskAdjustmentListResponse,
+    dependencies=[Depends(verify_user)],
+)
 def get_user_risk_adjustments(user_id: str, skip: int = 0, limit: int = 10):
     """Return paginated risk adjustment records for the user."""
 
@@ -496,7 +541,10 @@ def get_user_risk_adjustments(user_id: str, skip: int = 0, limit: int = 10):
     return RiskAdjustmentListResponse(total=total, items=records)
 
 
-@app.post("/users/{user_id}/earnings")
+@app.post(
+    "/users/{user_id}/earnings",
+    dependencies=[Depends(verify_user)],
+)
 def post_user_earnings(user_id: str, payload: EarningsRequest) -> Dict[str, float]:
     """Record a user's deposit and return projected earnings."""
     return calculate_total_earning(user_id, payload.pool_id, payload.amount)
