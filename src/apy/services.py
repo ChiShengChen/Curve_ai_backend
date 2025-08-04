@@ -14,6 +14,7 @@ from .database import (
     WithdrawalTransaction,
     RebalanceAction,
     FundDeployment,
+    RiskAdjustment,
 )
 
 
@@ -311,6 +312,62 @@ def get_fund_deployments(
         total = query.count()
         records = (
             query.order_by(FundDeployment.executed_at.desc())
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
+        return records, total
+    finally:
+        session.close()
+
+
+def create_risk_adjustment(
+    user_id: str,
+    pool_id: str,
+    total_volatility: float,
+    trigger_event: str,
+    action_taken: str,
+    reallocated_amount: float,
+    asset_type: str,
+    old_risk_score: float,
+    new_risk_score: float,
+    recorded_at: datetime | None = None,
+):
+    """Persist a risk adjustment entry for the given user."""
+
+    session: Session = SessionLocal()
+    try:
+        adjustment = RiskAdjustment(
+            user_id=user_id,
+            pool_id=pool_id,
+            total_volatility=total_volatility,
+            trigger_event=trigger_event,
+            action_taken=action_taken,
+            reallocated_amount=reallocated_amount,
+            asset_type=asset_type,
+            old_risk_score=old_risk_score,
+            new_risk_score=new_risk_score,
+            recorded_at=recorded_at or datetime.utcnow(),
+        )
+        session.add(adjustment)
+        session.commit()
+        session.refresh(adjustment)
+        return adjustment
+    finally:
+        session.close()
+
+
+def get_risk_adjustments(
+    user_id: str, skip: int = 0, limit: int = 10
+) -> Tuple[List[RiskAdjustment], int]:
+    """Retrieve paginated risk adjustments for a user."""
+
+    session: Session = SessionLocal()
+    try:
+        query = session.query(RiskAdjustment).filter(RiskAdjustment.user_id == user_id)
+        total = query.count()
+        records = (
+            query.order_by(RiskAdjustment.recorded_at.desc())
             .offset(skip)
             .limit(limit)
             .all()
