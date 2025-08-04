@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from .database import SessionLocal, PoolMetric, init_db
 from .services import (
     calculate_total_earning,
+    get_user_positions,
     create_deposit_transaction,
     get_deposit_transactions,
     create_withdrawal_transaction,
@@ -237,6 +238,24 @@ class DeploymentListResponse(BaseModel):
     items: List[DeploymentResponse]
 
 
+class UserPositionItem(BaseModel):
+    """Representation of a user's holdings in a pool."""
+
+    pool_id: str
+    amount: float
+    projected_earning: float
+    current_apr: float
+
+
+class UserPositionsResponse(BaseModel):
+    """Aggregated response for all user positions."""
+
+    user_id: str
+    total_amount: float
+    total_projected_earning: float
+    positions: List[UserPositionItem]
+
+
 class EarningsRequest(BaseModel):
     """Request body for calculating earnings for a deposit."""
 
@@ -416,6 +435,13 @@ def get_user_deployments(
         risk_level=risk_level,
     )
     return DeploymentListResponse(total=total, items=records)
+
+
+@app.get("/users/{user_id}/positions", response_model=UserPositionsResponse)
+def get_user_positions_endpoint(user_id: str) -> UserPositionsResponse:
+    """Return aggregated positions and earnings for the user."""
+
+    return get_user_positions(user_id)
 
 
 @app.post("/users/{user_id}/rebalances", response_model=RebalanceActionResponse)

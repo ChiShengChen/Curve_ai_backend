@@ -38,6 +38,20 @@ The API also allows tracking of user operations:
 - `POST /users/{user_id}/rebalances` – record a strategy-driven rebalance action.
 - `POST /users/{user_id}/deployments` – store a new fund deployment.
 - `POST /users/{user_id}/risk-adjustments` – log a risk-based reallocation.
+- `GET /users/{user_id}/positions` – retrieve current positions with projected earnings.
+- `POST /users/{user_id}/earnings` – submit a deposit and calculate updated earnings.
+
+### Querying positions and calculating earnings
+
+After making deposits with the earnings endpoint, aggregated holdings and projected
+returns can be fetched:
+
+```bash
+curl http://localhost:8000/users/alice/positions
+```
+
+The response includes per-pool amounts, projected earnings, current APR and totals
+across all pools.
 
 Each endpoint accepts a JSON payload describing the event and returns the stored
 record.
