@@ -26,7 +26,7 @@ def fetch_all_pool_metrics() -> int:
                     apy=metric.get("apy"),
                     bribe=metric.get("bribe"),
                     trading_fee=metric.get("trading_fee"),
-                    crv=metric.get("crv"),
+                    crv_reward=metric.get("crv_reward"),
                     recorded_at=now,
                 )
             )
