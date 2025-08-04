@@ -41,6 +41,26 @@ The API also allows tracking of user operations:
 - `GET /users/{user_id}/positions` – retrieve current positions with projected earnings.
 - `POST /users/{user_id}/earnings` – submit a deposit and calculate updated earnings.
 
+### Authentication
+
+All `/users/{user_id}/*` endpoints require a bearer token. Tokens are configured
+via the `API_TOKENS` environment variable using comma-separated `user:token`
+pairs:
+
+```bash
+export API_TOKENS="alice:alice-token,bob:bob-token"
+```
+
+Include the token in requests using the `Authorization` header:
+
+```bash
+curl -H "Authorization: Bearer alice-token" \
+     http://localhost:8000/users/alice/positions
+```
+
+Using a token for a different user or an unknown token returns an authentication
+error.
+
 ### Querying positions and calculating earnings
 
 After making deposits with the earnings endpoint, aggregated holdings and projected
