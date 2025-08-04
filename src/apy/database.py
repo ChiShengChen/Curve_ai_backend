@@ -26,6 +26,17 @@ class PoolMetric(Base):
     recorded_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
+class UserPosition(Base):
+    """Track per-user deposits into pools."""
+
+    __tablename__ = "user_positions"
+
+    user_id = Column(String, primary_key=True)
+    pool_id = Column(String, primary_key=True)
+    amount = Column(Float, default=0.0)
+    last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 def init_db() -> None:
     """Create database tables if they do not exist."""
     Base.metadata.create_all(bind=engine)

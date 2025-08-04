@@ -4,10 +4,13 @@ from datetime import datetime, timedelta
 from typing import Dict, List
 
 from fastapi import FastAPI, HTTPException
+
 from pydantic import BaseModel, Field
+
 from sqlalchemy.orm import Session
 
 from .database import SessionLocal, PoolMetric, init_db
+from .services import calculate_total_earning
 
 
 app = FastAPI(title="Curve APY API")
@@ -132,3 +135,9 @@ def get_yield_sources(pool_id: str):
     finally:
         session.close()
 
+
+
+@app.post("/users/{user_id}/earnings")
+def post_user_earnings(user_id: str, payload: EarningsRequest):
+    """Record a user's deposit and return projected earnings."""
+    return calculate_total_earning(user_id, payload.pool_id, payload.amount)
