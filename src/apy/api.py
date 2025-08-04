@@ -1,7 +1,7 @@
 """FastAPI application exposing pool APY and yield source endpoints."""
 
 from datetime import datetime, timedelta
-from typing import Dict, List
+from typing import Dict, List, Generator
 
 from fastapi import Depends, FastAPI, HTTPException
 
@@ -29,6 +29,15 @@ from .services import (
 
 app = FastAPI(title="Curve APY API")
 init_db()
+
+
+def get_db() -> Generator[Session, None, None]:
+    """Provide a transactional scope around a series of operations."""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
 class YieldComponent(BaseModel):
@@ -296,60 +305,52 @@ def _get_metrics(session: Session, pool_id: str):
 
 
 @app.get("/pools/{pool_id}/apy", response_model=APYHistoryResponse)
-def get_pool_apy(pool_id: str):
+def get_pool_apy(pool_id: str, db: Session = Depends(get_db)):
     """Return current APY and historical metrics for the given pool."""
 
-    session: Session = SessionLocal()
-    try:
-        latest, history7, history30 = _get_metrics(session, pool_id)
+    latest, history7, history30 = _get_metrics(db, pool_id)
 
-        def serialize(metric: PoolMetric) -> APYSnapshot:
-            return APYSnapshot(
-                apy=metric.apy,
-                bribe=metric.bribe,
-                trading_fee=metric.trading_fee,
-                crv_reward=metric.crv_reward,
-                recorded_at=metric.recorded_at,
-            )
-
-        return APYHistoryResponse(
-            pool_id=pool_id,
-            current=serialize(latest),
-            history={
-                "7d": [serialize(m) for m in history7],
-                "30d": [serialize(m) for m in history30],
-            },
+    def serialize(metric: PoolMetric) -> APYSnapshot:
+        return APYSnapshot(
+            apy=metric.apy,
+            bribe=metric.bribe,
+            trading_fee=metric.trading_fee,
+            crv_reward=metric.crv_reward,
+            recorded_at=metric.recorded_at,
         )
-    finally:
-        session.close()
+
+    return APYHistoryResponse(
+        pool_id=pool_id,
+        current=serialize(latest),
+        history={
+            "7d": [serialize(m) for m in history7],
+            "30d": [serialize(m) for m in history30],
+        },
+    )
 
 
 @app.get("/pools/{pool_id}/yield-sources", response_model=YieldSourcesResponse)
-def get_yield_sources(pool_id: str):
+def get_yield_sources(pool_id: str, db: Session = Depends(get_db)):
     """Return bribe, trading fee and CRV reward components for a pool."""
 
-    session: Session = SessionLocal()
-    try:
-        latest, history7, history30 = _get_metrics(session, pool_id)
+    latest, history7, history30 = _get_metrics(db, pool_id)
 
-        def serialize(metric: PoolMetric) -> YieldComponent:
-            return YieldComponent(
-                bribe=metric.bribe,
-                trading_fee=metric.trading_fee,
-                crv_reward=metric.crv_reward,
-                recorded_at=metric.recorded_at,
-            )
-
-        return YieldSourcesResponse(
-            pool_id=pool_id,
-            current=serialize(latest),
-            history={
-                "7d": [serialize(m) for m in history7],
-                "30d": [serialize(m) for m in history30],
-            },
+    def serialize(metric: PoolMetric) -> YieldComponent:
+        return YieldComponent(
+            bribe=metric.bribe,
+            trading_fee=metric.trading_fee,
+            crv_reward=metric.crv_reward,
+            recorded_at=metric.recorded_at,
         )
-    finally:
-        session.close()
+
+    return YieldSourcesResponse(
+        pool_id=pool_id,
+        current=serialize(latest),
+        history={
+            "7d": [serialize(m) for m in history7],
+            "30d": [serialize(m) for m in history30],
+        },
+    )
 
 
 @app.post(
@@ -357,7 +358,9 @@ def get_yield_sources(pool_id: str):
     response_model=DepositResponse,
     dependencies=[Depends(verify_user)],
 )
-def post_user_deposit(user_id: str, payload: DepositRequest):
+def post_user_deposit(
+    user_id: str, payload: DepositRequest, db: Session = Depends(get_db)
+):
     """Record a new deposit transaction for the user."""
 
     return create_deposit_transaction(
@@ -378,7 +381,9 @@ def post_user_deposit(user_id: str, payload: DepositRequest):
     response_model=DepositListResponse,
     dependencies=[Depends(verify_user)],
 )
-def get_user_deposits(user_id: str, skip: int = 0, limit: int = 10):
+def get_user_deposits(
+    user_id: str, skip: int = 0, limit: int = 10, db: Session = Depends(get_db)
+):
     """Return paginated deposit transactions for the user."""
 
     records, total = get_deposit_transactions(user_id, skip, limit)
@@ -390,7 +395,9 @@ def get_user_deposits(user_id: str, skip: int = 0, limit: int = 10):
     response_model=WithdrawalResponse,
     dependencies=[Depends(verify_user)],
 )
-def post_user_withdrawal(user_id: str, payload: WithdrawalRequest):
+def post_user_withdrawal(
+    user_id: str, payload: WithdrawalRequest, db: Session = Depends(get_db)
+):
     """Record a new withdrawal transaction for the user."""
 
     return create_withdrawal_transaction(
@@ -411,7 +418,9 @@ def post_user_withdrawal(user_id: str, payload: WithdrawalRequest):
     response_model=WithdrawalListResponse,
     dependencies=[Depends(verify_user)],
 )
-def get_user_withdrawals(user_id: str, skip: int = 0, limit: int = 10):
+def get_user_withdrawals(
+    user_id: str, skip: int = 0, limit: int = 10, db: Session = Depends(get_db)
+):
     """Return paginated withdrawal transactions for the user."""
 
     records, total = get_withdrawal_transactions(user_id, skip, limit)
@@ -423,7 +432,9 @@ def get_user_withdrawals(user_id: str, skip: int = 0, limit: int = 10):
     response_model=DeploymentResponse,
     dependencies=[Depends(verify_user)],
 )
-def post_user_deployment(user_id: str, payload: DeploymentRequest):
+def post_user_deployment(
+    user_id: str, payload: DeploymentRequest, db: Session = Depends(get_db)
+):
     """Record a new fund deployment for the user."""
 
     return create_fund_deployment(
@@ -448,6 +459,7 @@ def get_user_deployments(
     status: str | None = None,
     strategy: str | None = None,
     risk_level: str | None = None,
+    db: Session = Depends(get_db),
 ):
     """Return paginated fund deployments for the user with optional filters."""
 
@@ -467,7 +479,9 @@ def get_user_deployments(
     response_model=UserPositionsResponse,
     dependencies=[Depends(verify_user)],
 )
-def get_user_positions_endpoint(user_id: str) -> UserPositionsResponse:
+def get_user_positions_endpoint(
+    user_id: str, db: Session = Depends(get_db)
+) -> UserPositionsResponse:
     """Return aggregated positions and earnings for the user."""
 
     return get_user_positions(user_id)
@@ -478,7 +492,9 @@ def get_user_positions_endpoint(user_id: str) -> UserPositionsResponse:
     response_model=RebalanceActionResponse,
     dependencies=[Depends(verify_user)],
 )
-def post_user_rebalance(user_id: str, payload: RebalanceActionRequest):
+def post_user_rebalance(
+    user_id: str, payload: RebalanceActionRequest, db: Session = Depends(get_db)
+):
     """Record a new rebalance action for the user."""
 
     return create_rebalance_action(
@@ -501,7 +517,9 @@ def post_user_rebalance(user_id: str, payload: RebalanceActionRequest):
     response_model=RebalanceListResponse,
     dependencies=[Depends(verify_user)],
 )
-def get_user_rebalances(user_id: str, skip: int = 0, limit: int = 10):
+def get_user_rebalances(
+    user_id: str, skip: int = 0, limit: int = 10, db: Session = Depends(get_db)
+):
     """Return paginated rebalance actions for the user."""
 
     records, total = get_rebalance_actions(user_id, skip, limit)
@@ -513,7 +531,9 @@ def get_user_rebalances(user_id: str, skip: int = 0, limit: int = 10):
     response_model=RiskAdjustmentResponse,
     dependencies=[Depends(verify_user)],
 )
-def post_user_risk_adjustment(user_id: str, payload: RiskAdjustmentRequest):
+def post_user_risk_adjustment(
+    user_id: str, payload: RiskAdjustmentRequest, db: Session = Depends(get_db)
+):
     """Record a new risk adjustment for the user."""
 
     return create_risk_adjustment(
@@ -534,7 +554,9 @@ def post_user_risk_adjustment(user_id: str, payload: RiskAdjustmentRequest):
     response_model=RiskAdjustmentListResponse,
     dependencies=[Depends(verify_user)],
 )
-def get_user_risk_adjustments(user_id: str, skip: int = 0, limit: int = 10):
+def get_user_risk_adjustments(
+    user_id: str, skip: int = 0, limit: int = 10, db: Session = Depends(get_db)
+):
     """Return paginated risk adjustment records for the user."""
 
     records, total = get_risk_adjustments(user_id, skip, limit)
@@ -545,6 +567,8 @@ def get_user_risk_adjustments(user_id: str, skip: int = 0, limit: int = 10):
     "/users/{user_id}/earnings",
     dependencies=[Depends(verify_user)],
 )
-def post_user_earnings(user_id: str, payload: EarningsRequest) -> Dict[str, float]:
+def post_user_earnings(
+    user_id: str, payload: EarningsRequest, db: Session = Depends(get_db)
+) -> Dict[str, float]:
     """Record a user's deposit and return projected earnings."""
     return calculate_total_earning(user_id, payload.pool_id, payload.amount)
