@@ -3,7 +3,9 @@
 from datetime import datetime
 from typing import Dict, List, Tuple
 
+from fastapi import HTTPException
 from sqlalchemy import func
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from .database import (
@@ -16,6 +18,14 @@ from .database import (
     FundDeployment,
     RiskAdjustment,
 )
+
+
+def _handle_service_error(session: Session, exc: Exception) -> None:
+    """Rollback transaction and raise HTTP exception for service errors."""
+    session.rollback()
+    if isinstance(exc, SQLAlchemyError):
+        raise HTTPException(status_code=500, detail="Database error") from exc
+    raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def calculate_total_earning(user_id: str, pool_id: str, amount: float) -> Dict[str, float]:
@@ -86,6 +96,8 @@ def calculate_total_earning(user_id: str, pool_id: str, amount: float) -> Dict[s
             "projected_earning": projected_earning,
             "current_apr": current_apr,
         }
+    except Exception as exc:
+        _handle_service_error(session, exc)
     finally:
         session.close()
 
@@ -148,6 +160,8 @@ def get_user_positions(user_id: str) -> Dict[str, object]:
             "total_projected_earning": total_earning,
             "positions": items,
         }
+    except Exception as exc:
+        _handle_service_error(session, exc)
     finally:
         session.close()
 
@@ -182,6 +196,8 @@ def create_deposit_transaction(
         session.commit()
         session.refresh(deposit)
         return deposit
+    except Exception as exc:
+        _handle_service_error(session, exc)
     finally:
         session.close()
 
@@ -202,6 +218,8 @@ def get_deposit_transactions(
             .all()
         )
         return records, total
+    except Exception as exc:
+        _handle_service_error(session, exc)
     finally:
         session.close()
 
@@ -236,6 +254,8 @@ def create_withdrawal_transaction(
         session.commit()
         session.refresh(withdrawal)
         return withdrawal
+    except Exception as exc:
+        _handle_service_error(session, exc)
     finally:
         session.close()
 
@@ -258,6 +278,8 @@ def get_withdrawal_transactions(
             .all()
         )
         return records, total
+    except Exception as exc:
+        _handle_service_error(session, exc)
     finally:
         session.close()
 
@@ -298,6 +320,8 @@ def create_rebalance_action(
         session.commit()
         session.refresh(action)
         return action
+    except Exception as exc:
+        _handle_service_error(session, exc)
     finally:
         session.close()
 
@@ -318,6 +342,8 @@ def get_rebalance_actions(
             .all()
         )
         return records, total
+    except Exception as exc:
+        _handle_service_error(session, exc)
     finally:
         session.close()
 
@@ -348,6 +374,8 @@ def create_fund_deployment(
         session.commit()
         session.refresh(deployment)
         return deployment
+    except Exception as exc:
+        _handle_service_error(session, exc)
     finally:
         session.close()
 
@@ -379,6 +407,8 @@ def get_fund_deployments(
             .all()
         )
         return records, total
+    except Exception as exc:
+        _handle_service_error(session, exc)
     finally:
         session.close()
 
@@ -415,6 +445,8 @@ def create_risk_adjustment(
         session.commit()
         session.refresh(adjustment)
         return adjustment
+    except Exception as exc:
+        _handle_service_error(session, exc)
     finally:
         session.close()
 
@@ -435,5 +467,7 @@ def get_risk_adjustments(
             .all()
         )
         return records, total
+    except Exception as exc:
+        _handle_service_error(session, exc)
     finally:
         session.close()

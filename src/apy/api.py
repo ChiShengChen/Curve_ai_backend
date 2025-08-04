@@ -5,7 +5,7 @@ from typing import Dict, List, Generator
 
 from fastapi import Depends, FastAPI, HTTPException
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, confloat
 
 from sqlalchemy.orm import Session
 
@@ -74,7 +74,7 @@ class YieldSourcesResponse(BaseModel):
 class DepositRequest(BaseModel):
     """Request body for creating a deposit transaction."""
 
-    amount: float
+    amount: confloat(gt=0)
     asset: str
     from_address: str
     network: str
@@ -105,7 +105,7 @@ class DepositListResponse(BaseModel):
 class WithdrawalRequest(BaseModel):
     """Request body for creating a withdrawal transaction."""
 
-    amount: float
+    amount: confloat(gt=0)
     asset: str
     to_address: str
     network: str
@@ -270,7 +270,7 @@ class EarningsRequest(BaseModel):
     """Request body for calculating earnings for a deposit."""
 
     pool_id: str = Field(..., description="Pool identifier")
-    amount: float = Field(..., description="Amount to deposit")
+    amount: confloat(gt=0) = Field(..., description="Amount to deposit")
 
 
 def _get_metrics(session: Session, pool_id: str):
