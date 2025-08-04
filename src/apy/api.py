@@ -2,9 +2,11 @@
 
 from datetime import datetime, timedelta
 from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from .database import SessionLocal, PoolMetric, init_db
+from .services import calculate_total_earning
 
 app = FastAPI(title="Curve APY API")
 init_db()
@@ -60,3 +62,14 @@ def get_pool_apy(pool_id: str):
         }
     finally:
         session.close()
+
+
+class EarningsRequest(BaseModel):
+    pool_id: str
+    amount: float
+
+
+@app.post("/users/{user_id}/earnings")
+def post_user_earnings(user_id: str, payload: EarningsRequest):
+    """Record a user's deposit and return projected earnings."""
+    return calculate_total_earning(user_id, payload.pool_id, payload.amount)
