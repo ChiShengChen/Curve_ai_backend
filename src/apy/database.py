@@ -108,6 +108,24 @@ class FundDeployment(Base):
     executed_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
+class RiskAdjustment(Base):
+    """Record risk-based reallocation adjustments for a user."""
+
+    __tablename__ = "risk_adjustments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, index=True, nullable=False)
+    pool_id = Column(String, index=True, nullable=False)
+    total_volatility = Column(Float, nullable=False)
+    trigger_event = Column(String, nullable=False)
+    action_taken = Column(String, nullable=False)
+    reallocated_amount = Column(Float, nullable=False)
+    asset_type = Column(String, nullable=False)
+    old_risk_score = Column(Float, nullable=False)
+    new_risk_score = Column(Float, nullable=False)
+    recorded_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 def init_db() -> None:
     """Create database tables if they do not exist."""
     Base.metadata.create_all(bind=engine)

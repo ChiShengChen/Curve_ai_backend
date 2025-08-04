@@ -18,6 +18,7 @@ from .services import (
     get_withdrawal_transactions,
     get_rebalance_actions,
     get_fund_deployments,
+    get_risk_adjustments,
 )
 
 
@@ -144,6 +145,45 @@ class RebalanceListResponse(BaseModel):
 
     total: int
     items: List[RebalanceActionResponse]
+
+
+class RiskAdjustmentRequest(BaseModel):
+    """Request body for recording a risk adjustment."""
+
+    pool_id: str
+    total_volatility: float
+    trigger_event: str
+    action_taken: str
+    reallocated_amount: float
+    asset_type: str
+    old_risk_score: float
+    new_risk_score: float
+
+
+class RiskAdjustmentResponse(BaseModel):
+    """Serialized risk adjustment record."""
+
+    id: int
+    user_id: str
+    pool_id: str
+    total_volatility: float
+    trigger_event: str
+    action_taken: str
+    reallocated_amount: float
+    asset_type: str
+    old_risk_score: float
+    new_risk_score: float
+    recorded_at: datetime
+
+    class Config:
+        orm_mode = True
+
+
+class RiskAdjustmentListResponse(BaseModel):
+    """Paginated list of risk adjustments."""
+
+    total: int
+    items: List[RiskAdjustmentResponse]
 
 
 class DeploymentResponse(BaseModel):
@@ -342,6 +382,14 @@ def get_user_rebalances(user_id: str, skip: int = 0, limit: int = 10):
 
     records, total = get_rebalance_actions(user_id, skip, limit)
     return RebalanceListResponse(total=total, items=records)
+
+
+@app.get("/users/{user_id}/risk-adjustments", response_model=RiskAdjustmentListResponse)
+def get_user_risk_adjustments(user_id: str, skip: int = 0, limit: int = 10):
+    """Return paginated risk adjustment records for the user."""
+
+    records, total = get_risk_adjustments(user_id, skip, limit)
+    return RiskAdjustmentListResponse(total=total, items=records)
 
 
 @app.post("/users/{user_id}/earnings")
