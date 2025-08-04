@@ -10,7 +10,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from .database import SessionLocal, PoolMetric, init_db
-from .services import calculate_total_earning
+from .services import (
+    calculate_total_earning,
+    create_deposit_transaction,
+    get_deposit_transactions,
+)
 
 
 app = FastAPI(title="Curve APY API")
@@ -46,6 +50,44 @@ class YieldSourcesResponse(BaseModel):
     pool_id: str
     current: YieldComponent
     history: Dict[str, List[YieldComponent]]
+
+
+class DepositRequest(BaseModel):
+    """Request body for creating a deposit transaction."""
+
+    amount: float
+    asset: str
+    from_address: str
+    network: str
+    gas_fee: float = 0.0
+    net_received: float
+    status: str = "pending"
+    tx_hash: str
+
+
+class DepositResponse(DepositRequest):
+    """Serialized deposit transaction."""
+
+    id: int
+    user_id: str
+    recorded_at: datetime
+
+    class Config:
+        orm_mode = True
+
+
+class DepositListResponse(BaseModel):
+    """Paginated list of deposit transactions."""
+
+    total: int
+    items: List[DepositResponse]
+
+
+class EarningsRequest(BaseModel):
+    """Request body for calculating earnings for a deposit."""
+
+    pool_id: str
+    amount: float
 
 
 def _get_metrics(session: Session, pool_id: str):
@@ -135,6 +177,30 @@ def get_yield_sources(pool_id: str):
     finally:
         session.close()
 
+
+@app.post("/users/{user_id}/deposits", response_model=DepositResponse)
+def post_user_deposit(user_id: str, payload: DepositRequest):
+    """Record a new deposit transaction for the user."""
+
+    return create_deposit_transaction(
+        user_id=user_id,
+        amount=payload.amount,
+        asset=payload.asset,
+        from_address=payload.from_address,
+        network=payload.network,
+        gas_fee=payload.gas_fee,
+        net_received=payload.net_received,
+        status=payload.status,
+        tx_hash=payload.tx_hash,
+    )
+
+
+@app.get("/users/{user_id}/deposits", response_model=DepositListResponse)
+def get_user_deposits(user_id: str, skip: int = 0, limit: int = 10):
+    """Return paginated deposit transactions for the user."""
+
+    records, total = get_deposit_transactions(user_id, skip, limit)
+    return DepositListResponse(total=total, items=records)
 
 
 @app.post("/users/{user_id}/earnings")
