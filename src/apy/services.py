@@ -1,9 +1,11 @@
 """Service layer for user earnings calculations."""
 
+import logging
 from datetime import datetime
 from typing import Dict, List, Tuple
 
 from fastapi import HTTPException
+from prometheus_client import Counter
 from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -20,9 +22,30 @@ from .database import (
 )
 
 
+logger = logging.getLogger(__name__)
+
+# Prometheus counters for key service events
+DEPOSIT_COUNTER = Counter(
+    "deposit_transactions_total", "Total deposit transactions created"
+)
+WITHDRAWAL_COUNTER = Counter(
+    "withdrawal_transactions_total", "Total withdrawal transactions created"
+)
+REBALANCE_COUNTER = Counter(
+    "rebalance_actions_total", "Total rebalance actions created"
+)
+DEPLOYMENT_COUNTER = Counter(
+    "fund_deployments_total", "Total fund deployments created"
+)
+RISK_ADJUST_COUNTER = Counter(
+    "risk_adjustments_total", "Total risk adjustments created"
+)
+
+
 def _handle_service_error(session: Session, exc: Exception) -> None:
     """Rollback transaction and raise HTTP exception for service errors."""
     session.rollback()
+    logger.exception("service layer error", exc_info=exc)
     if isinstance(exc, SQLAlchemyError):
         raise HTTPException(status_code=500, detail="Database error") from exc
     raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -45,6 +68,9 @@ def calculate_total_earning(user_id: str, pool_id: str, amount: float) -> Dict[s
     dict
         Dictionary containing total_amount, projected_earning and current_apr.
     """
+    logger.info(
+        "calculate earning user=%s pool=%s amount=%s", user_id, pool_id, amount
+    )
     session: Session = SessionLocal()
     try:
         # Update or create the user's position
@@ -89,13 +115,20 @@ def calculate_total_earning(user_id: str, pool_id: str, amount: float) -> Dict[s
         )
         current_apr = latest.apy if latest and latest.apy is not None else 0.0
 
-        return {
+        result = {
             "user_id": user_id,
             "pool_id": pool_id,
             "total_amount": total_amount,
             "projected_earning": projected_earning,
             "current_apr": current_apr,
         }
+        logger.info(
+            "calculated earning user=%s pool=%s projected=%s",
+            user_id,
+            pool_id,
+            projected_earning,
+        )
+        return result
     except Exception as exc:
         _handle_service_error(session, exc)
     finally:
@@ -179,6 +212,9 @@ def create_deposit_transaction(
 ):
     """Persist a new deposit transaction for the given user."""
 
+    logger.info(
+        "create deposit user=%s amount=%s asset=%s", user_id, amount, asset
+    )
     session: Session = SessionLocal()
     try:
         deposit = DepositTransaction(
@@ -195,6 +231,10 @@ def create_deposit_transaction(
         session.add(deposit)
         session.commit()
         session.refresh(deposit)
+        DEPOSIT_COUNTER.inc()
+        logger.info(
+            "created deposit id=%s user=%s amount=%s", deposit.id, user_id, amount
+        )
         return deposit
     except Exception as exc:
         _handle_service_error(session, exc)
@@ -237,6 +277,9 @@ def create_withdrawal_transaction(
 ):
     """Persist a new withdrawal transaction for the given user."""
 
+    logger.info(
+        "create withdrawal user=%s amount=%s asset=%s", user_id, amount, asset
+    )
     session: Session = SessionLocal()
     try:
         withdrawal = WithdrawalTransaction(
@@ -253,6 +296,13 @@ def create_withdrawal_transaction(
         session.add(withdrawal)
         session.commit()
         session.refresh(withdrawal)
+        WITHDRAWAL_COUNTER.inc()
+        logger.info(
+            "created withdrawal id=%s user=%s amount=%s",
+            withdrawal.id,
+            user_id,
+            amount,
+        )
         return withdrawal
     except Exception as exc:
         _handle_service_error(session, exc)
@@ -300,6 +350,12 @@ def create_rebalance_action(
 ):
     """Persist a new rebalance action for the given user."""
 
+    logger.info(
+        "create rebalance user=%s old_pool=%s new_pool=%s",
+        user_id,
+        old_pool,
+        new_pool,
+    )
     session: Session = SessionLocal()
     try:
         action = RebalanceAction(
@@ -319,6 +375,10 @@ def create_rebalance_action(
         session.add(action)
         session.commit()
         session.refresh(action)
+        REBALANCE_COUNTER.inc()
+        logger.info(
+            "created rebalance id=%s user=%s", action.id, user_id
+        )
         return action
     except Exception as exc:
         _handle_service_error(session, exc)
@@ -359,6 +419,12 @@ def create_fund_deployment(
 ):
     """Persist a fund deployment record for the given user."""
 
+    logger.info(
+        "create deployment user=%s strategy=%s risk=%s",
+        user_id,
+        strategy,
+        risk_level,
+    )
     session: Session = SessionLocal()
     try:
         deployment = FundDeployment(
@@ -373,6 +439,10 @@ def create_fund_deployment(
         session.add(deployment)
         session.commit()
         session.refresh(deployment)
+        DEPLOYMENT_COUNTER.inc()
+        logger.info(
+            "created deployment id=%s user=%s", deployment.id, user_id
+        )
         return deployment
     except Exception as exc:
         _handle_service_error(session, exc)
@@ -427,6 +497,9 @@ def create_risk_adjustment(
 ):
     """Persist a risk adjustment entry for the given user."""
 
+    logger.info(
+        "create risk adjustment user=%s pool=%s", user_id, pool_id
+    )
     session: Session = SessionLocal()
     try:
         adjustment = RiskAdjustment(
@@ -444,6 +517,12 @@ def create_risk_adjustment(
         session.add(adjustment)
         session.commit()
         session.refresh(adjustment)
+        RISK_ADJUST_COUNTER.inc()
+        logger.info(
+            "created risk adjustment id=%s user=%s",
+            adjustment.id,
+            user_id,
+        )
         return adjustment
     except Exception as exc:
         _handle_service_error(session, exc)

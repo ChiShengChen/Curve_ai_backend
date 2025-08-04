@@ -3,7 +3,9 @@
 from datetime import datetime, timedelta
 from typing import Dict, List, Generator
 
-from fastapi import Depends, FastAPI, HTTPException
+import logging
+from fastapi import Depends, FastAPI, HTTPException, Request
+from prometheus_client import Counter
 
 from pydantic import BaseModel, Field, confloat
 
@@ -29,6 +31,45 @@ from .services import (
 
 app = FastAPI(title="Curve APY API")
 init_db()
+
+logger = logging.getLogger(__name__)
+
+# Prometheus counter to track API requests by method, endpoint and status code
+REQUEST_COUNTER = Counter(
+    "api_requests_total",
+    "Total API requests",
+    ["method", "endpoint", "status"],
+)
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """Log incoming requests and their outcomes while updating metrics."""
+    logger.info("request %s %s", request.method, request.url.path)
+    try:
+        response = await call_next(request)
+        REQUEST_COUNTER.labels(
+            method=request.method,
+            endpoint=request.url.path,
+            status=str(response.status_code),
+        ).inc()
+        logger.info(
+            "response %s %s status %s",
+            request.method,
+            request.url.path,
+            response.status_code,
+        )
+        return response
+    except Exception:
+        REQUEST_COUNTER.labels(
+            method=request.method,
+            endpoint=request.url.path,
+            status="500",
+        ).inc()
+        logger.exception(
+            "error handling %s %s", request.method, request.url.path
+        )
+        raise
 
 
 def get_db() -> Generator[Session, None, None]:

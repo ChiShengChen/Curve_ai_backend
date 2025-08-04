@@ -5,6 +5,7 @@ import os
 from datetime import datetime, timedelta
 from typing import Dict, List
 
+from prometheus_client import Counter
 from sqlalchemy import text
 
 from .curve import fetch_pool_data
@@ -14,6 +15,11 @@ from .worker import celery_app
 
 logger = logging.getLogger(__name__)
 
+# Counter to track how many pool metrics are persisted
+METRIC_INSERT_COUNTER = Counter(
+    "pool_metrics_inserted_total", "Total pool metrics inserted"
+)
+
 
 @celery_app.task(bind=True, autoretry_for=(Exception,), retry_backoff=True, retry_kwargs={"max_retries": 3})
 def fetch_all_pool_metrics(self) -> int:
@@ -21,6 +27,7 @@ def fetch_all_pool_metrics(self) -> int:
 
     Returns the number of records inserted.
     """
+    logger.info("fetching pool metrics")
     pool_metrics: List[Dict[str, float]] = fetch_pool_data()
     session = SessionLocal()
     # Ensure composite index exists for efficient lookups
@@ -70,6 +77,8 @@ def fetch_all_pool_metrics(self) -> int:
             session.query(PoolMetric).filter(PoolMetric.recorded_at < expiry).delete()
 
         session.commit()
+        METRIC_INSERT_COUNTER.inc(count)
+        logger.info("inserted %d pool metrics", count)
         return count
     except Exception as exc:  # pragma: no cover - executed on failure
         session.rollback()

@@ -15,6 +15,7 @@ dependencies = [
     "SQLAlchemy",
     "celery",
     "redis",
+    "prometheus-client",
 ]
 
 [tool.pytest.ini_options]
