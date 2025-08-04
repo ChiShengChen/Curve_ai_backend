@@ -1,12 +1,17 @@
 """Service layer for user earnings calculations."""
 
 from datetime import datetime
-from typing import Dict
+from typing import Dict, List, Tuple
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from .database import SessionLocal, PoolMetric, UserPosition
+from .database import (
+    SessionLocal,
+    PoolMetric,
+    UserPosition,
+    DepositTransaction,
+)
 
 
 def calculate_total_earning(user_id: str, pool_id: str, amount: float) -> Dict[str, float]:
@@ -77,5 +82,59 @@ def calculate_total_earning(user_id: str, pool_id: str, amount: float) -> Dict[s
             "projected_earning": projected_earning,
             "current_apr": current_apr,
         }
+    finally:
+        session.close()
+
+
+def create_deposit_transaction(
+    user_id: str,
+    amount: float,
+    asset: str,
+    from_address: str,
+    network: str,
+    gas_fee: float,
+    net_received: float,
+    status: str,
+    tx_hash: str,
+):
+    """Persist a new deposit transaction for the given user."""
+
+    session: Session = SessionLocal()
+    try:
+        deposit = DepositTransaction(
+            user_id=user_id,
+            amount=amount,
+            asset=asset,
+            from_address=from_address,
+            network=network,
+            gas_fee=gas_fee,
+            net_received=net_received,
+            status=status,
+            tx_hash=tx_hash,
+        )
+        session.add(deposit)
+        session.commit()
+        session.refresh(deposit)
+        return deposit
+    finally:
+        session.close()
+
+
+def get_deposit_transactions(
+    user_id: str, skip: int = 0, limit: int = 10
+) -> Tuple[List[DepositTransaction], int]:
+    """Retrieve paginated deposit transactions for a user."""
+
+    session: Session = SessionLocal()
+    try:
+        query = session.query(DepositTransaction).filter(DepositTransaction.user_id == user_id)
+        total = query.count()
+        records = (
+            query.order_by(DepositTransaction.recorded_at.desc())
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
+        return records, total
     finally:
         session.close()
