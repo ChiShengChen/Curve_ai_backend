@@ -16,6 +16,7 @@ from .services import (
     get_deposit_transactions,
     create_withdrawal_transaction,
     get_withdrawal_transactions,
+    get_rebalance_actions,
 )
 
 
@@ -114,6 +115,34 @@ class WithdrawalListResponse(BaseModel):
 
     total: int
     items: List[WithdrawalResponse]
+
+
+class RebalanceActionResponse(BaseModel):
+    """Serialized rebalance action."""
+
+    id: int
+    user_id: str
+    old_pool: str
+    new_pool: str
+    old_apy: float
+    new_apy: float
+    strategy: str
+    action_type: str
+    moved_amount: float
+    asset_type: str
+    new_allocation: float
+    gas_cost: float
+    executed_at: datetime
+
+    class Config:
+        orm_mode = True
+
+
+class RebalanceListResponse(BaseModel):
+    """Paginated list of rebalance actions."""
+
+    total: int
+    items: List[RebalanceActionResponse]
 
 
 class EarningsRequest(BaseModel):
@@ -259,6 +288,14 @@ def get_user_withdrawals(user_id: str, skip: int = 0, limit: int = 10):
 
     records, total = get_withdrawal_transactions(user_id, skip, limit)
     return WithdrawalListResponse(total=total, items=records)
+
+
+@app.get("/users/{user_id}/rebalances", response_model=RebalanceListResponse)
+def get_user_rebalances(user_id: str, skip: int = 0, limit: int = 10):
+    """Return paginated rebalance actions for the user."""
+
+    records, total = get_rebalance_actions(user_id, skip, limit)
+    return RebalanceListResponse(total=total, items=records)
 
 
 @app.post("/users/{user_id}/earnings")

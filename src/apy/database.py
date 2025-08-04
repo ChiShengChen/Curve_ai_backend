@@ -73,6 +73,26 @@ class WithdrawalTransaction(Base):
     recorded_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
+class RebalanceAction(Base):
+    """Record strategy-driven rebalance actions for a user."""
+
+    __tablename__ = "rebalance_actions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, index=True, nullable=False)
+    old_pool = Column(String, nullable=False)
+    new_pool = Column(String, nullable=False)
+    old_apy = Column(Float, nullable=False)
+    new_apy = Column(Float, nullable=False)
+    strategy = Column(String, nullable=False)
+    action_type = Column(String, nullable=False)
+    moved_amount = Column(Float, nullable=False)
+    asset_type = Column(String, nullable=False)
+    new_allocation = Column(Float, nullable=False)
+    gas_cost = Column(Float, default=0.0)
+    executed_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 def init_db() -> None:
     """Create database tables if they do not exist."""
     Base.metadata.create_all(bind=engine)
