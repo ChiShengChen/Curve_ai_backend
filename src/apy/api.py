@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field, confloat
 from sqlalchemy.orm import Session
 
 from .auth import verify_user
+from .config import settings
 from .database import SessionLocal, PoolMetric, init_db
 from .services import (
     calculate_total_earning,
@@ -29,7 +30,7 @@ from .services import (
 )
 
 
-app = FastAPI(title="Curve APY API")
+app = FastAPI(title=settings.api_title)
 init_db()
 
 logger = logging.getLogger(__name__)
