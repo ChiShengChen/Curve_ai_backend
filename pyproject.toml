@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "curve-ai-backend"
+version = "0.1.0"
+description = "Curve APY backend"
+authors = [{name = "OpenAI"}]
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "requests",
+    "SQLAlchemy",
+    "celery",
+    "redis",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
