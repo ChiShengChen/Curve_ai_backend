@@ -16,8 +16,11 @@ from .services import (
     get_deposit_transactions,
     create_withdrawal_transaction,
     get_withdrawal_transactions,
+    create_rebalance_action,
     get_rebalance_actions,
+    create_fund_deployment,
     get_fund_deployments,
+    create_risk_adjustment,
     get_risk_adjustments,
 )
 
@@ -119,6 +122,21 @@ class WithdrawalListResponse(BaseModel):
     items: List[WithdrawalResponse]
 
 
+class RebalanceActionRequest(BaseModel):
+    """Request body for recording a rebalance action."""
+
+    old_pool: str
+    new_pool: str
+    old_apy: float
+    new_apy: float
+    strategy: str
+    action_type: str
+    moved_amount: float
+    asset_type: str
+    new_allocation: float
+    gas_cost: float = 0.0
+
+
 class RebalanceActionResponse(BaseModel):
     """Serialized rebalance action."""
 
@@ -184,6 +202,16 @@ class RiskAdjustmentListResponse(BaseModel):
 
     total: int
     items: List[RiskAdjustmentResponse]
+
+
+class DeploymentRequest(BaseModel):
+    """Request body for recording a fund deployment."""
+
+    strategy: str
+    risk_level: str
+    expected_apy: float
+    tx_fee: float = 0.0
+    status: str = "pending"
 
 
 class DeploymentResponse(BaseModel):
@@ -354,6 +382,20 @@ def get_user_withdrawals(user_id: str, skip: int = 0, limit: int = 10):
     return WithdrawalListResponse(total=total, items=records)
 
 
+@app.post("/users/{user_id}/deployments", response_model=DeploymentResponse)
+def post_user_deployment(user_id: str, payload: DeploymentRequest):
+    """Record a new fund deployment for the user."""
+
+    return create_fund_deployment(
+        user_id=user_id,
+        strategy=payload.strategy,
+        risk_level=payload.risk_level,
+        expected_apy=payload.expected_apy,
+        tx_fee=payload.tx_fee,
+        status=payload.status,
+    )
+
+
 @app.get("/users/{user_id}/deployments", response_model=DeploymentListResponse)
 def get_user_deployments(
     user_id: str,
@@ -376,12 +418,48 @@ def get_user_deployments(
     return DeploymentListResponse(total=total, items=records)
 
 
+@app.post("/users/{user_id}/rebalances", response_model=RebalanceActionResponse)
+def post_user_rebalance(user_id: str, payload: RebalanceActionRequest):
+    """Record a new rebalance action for the user."""
+
+    return create_rebalance_action(
+        user_id=user_id,
+        old_pool=payload.old_pool,
+        new_pool=payload.new_pool,
+        old_apy=payload.old_apy,
+        new_apy=payload.new_apy,
+        strategy=payload.strategy,
+        action_type=payload.action_type,
+        moved_amount=payload.moved_amount,
+        asset_type=payload.asset_type,
+        new_allocation=payload.new_allocation,
+        gas_cost=payload.gas_cost,
+    )
+
+
 @app.get("/users/{user_id}/rebalances", response_model=RebalanceListResponse)
 def get_user_rebalances(user_id: str, skip: int = 0, limit: int = 10):
     """Return paginated rebalance actions for the user."""
 
     records, total = get_rebalance_actions(user_id, skip, limit)
     return RebalanceListResponse(total=total, items=records)
+
+
+@app.post("/users/{user_id}/risk-adjustments", response_model=RiskAdjustmentResponse)
+def post_user_risk_adjustment(user_id: str, payload: RiskAdjustmentRequest):
+    """Record a new risk adjustment for the user."""
+
+    return create_risk_adjustment(
+        user_id=user_id,
+        pool_id=payload.pool_id,
+        total_volatility=payload.total_volatility,
+        trigger_event=payload.trigger_event,
+        action_taken=payload.action_taken,
+        reallocated_amount=payload.reallocated_amount,
+        asset_type=payload.asset_type,
+        old_risk_score=payload.old_risk_score,
+        new_risk_score=payload.new_risk_score,
+    )
 
 
 @app.get("/users/{user_id}/risk-adjustments", response_model=RiskAdjustmentListResponse)
