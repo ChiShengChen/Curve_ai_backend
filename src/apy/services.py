@@ -11,6 +11,7 @@ from .database import (
     PoolMetric,
     UserPosition,
     DepositTransaction,
+    WithdrawalTransaction,
 )
 
 
@@ -131,6 +132,62 @@ def get_deposit_transactions(
         total = query.count()
         records = (
             query.order_by(DepositTransaction.recorded_at.desc())
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
+        return records, total
+    finally:
+        session.close()
+
+
+def create_withdrawal_transaction(
+    user_id: str,
+    amount: float,
+    asset: str,
+    to_address: str,
+    network: str,
+    gas_fee: float,
+    net_received: float,
+    status: str,
+    tx_hash: str,
+):
+    """Persist a new withdrawal transaction for the given user."""
+
+    session: Session = SessionLocal()
+    try:
+        withdrawal = WithdrawalTransaction(
+            user_id=user_id,
+            amount=amount,
+            asset=asset,
+            to_address=to_address,
+            network=network,
+            gas_fee=gas_fee,
+            net_received=net_received,
+            status=status,
+            tx_hash=tx_hash,
+        )
+        session.add(withdrawal)
+        session.commit()
+        session.refresh(withdrawal)
+        return withdrawal
+    finally:
+        session.close()
+
+
+def get_withdrawal_transactions(
+    user_id: str, skip: int = 0, limit: int = 10
+) -> Tuple[List[WithdrawalTransaction], int]:
+    """Retrieve paginated withdrawal transactions for a user."""
+
+    session: Session = SessionLocal()
+    try:
+        query = session.query(WithdrawalTransaction).filter(
+            WithdrawalTransaction.user_id == user_id
+        )
+        total = query.count()
+        records = (
+            query.order_by(WithdrawalTransaction.recorded_at.desc())
             .offset(skip)
             .limit(limit)
             .all()

@@ -14,6 +14,8 @@ from .services import (
     calculate_total_earning,
     create_deposit_transaction,
     get_deposit_transactions,
+    create_withdrawal_transaction,
+    get_withdrawal_transactions,
 )
 
 
@@ -81,6 +83,37 @@ class DepositListResponse(BaseModel):
 
     total: int
     items: List[DepositResponse]
+
+
+class WithdrawalRequest(BaseModel):
+    """Request body for creating a withdrawal transaction."""
+
+    amount: float
+    asset: str
+    to_address: str
+    network: str
+    gas_fee: float = 0.0
+    net_received: float
+    status: str = "pending"
+    tx_hash: str
+
+
+class WithdrawalResponse(WithdrawalRequest):
+    """Serialized withdrawal transaction."""
+
+    id: int
+    user_id: str
+    recorded_at: datetime
+
+    class Config:
+        orm_mode = True
+
+
+class WithdrawalListResponse(BaseModel):
+    """Paginated list of withdrawal transactions."""
+
+    total: int
+    items: List[WithdrawalResponse]
 
 
 class EarningsRequest(BaseModel):
@@ -201,6 +234,31 @@ def get_user_deposits(user_id: str, skip: int = 0, limit: int = 10):
 
     records, total = get_deposit_transactions(user_id, skip, limit)
     return DepositListResponse(total=total, items=records)
+
+
+@app.post("/users/{user_id}/withdrawals", response_model=WithdrawalResponse)
+def post_user_withdrawal(user_id: str, payload: WithdrawalRequest):
+    """Record a new withdrawal transaction for the user."""
+
+    return create_withdrawal_transaction(
+        user_id=user_id,
+        amount=payload.amount,
+        asset=payload.asset,
+        to_address=payload.to_address,
+        network=payload.network,
+        gas_fee=payload.gas_fee,
+        net_received=payload.net_received,
+        status=payload.status,
+        tx_hash=payload.tx_hash,
+    )
+
+
+@app.get("/users/{user_id}/withdrawals", response_model=WithdrawalListResponse)
+def get_user_withdrawals(user_id: str, skip: int = 0, limit: int = 10):
+    """Return paginated withdrawal transactions for the user."""
+
+    records, total = get_withdrawal_transactions(user_id, skip, limit)
+    return WithdrawalListResponse(total=total, items=records)
 
 
 @app.post("/users/{user_id}/earnings")
