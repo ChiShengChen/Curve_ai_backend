@@ -33,11 +33,11 @@ def fetch_pool_data() -> List[Dict[str, float]]:
             apy = float(apy_data)
         bribe = pool.get("bribeApy") or 0.0
         trading_fee = pool.get("tradingFee") or pool.get("fee") or 0.0
-        crv = 0.0
+        crv_reward = 0.0
         for reward in pool.get("gaugeRewards", []) or []:
             token = reward.get("token", "").lower()
             if token == "crv":
-                crv = reward.get("apy", 0.0)
+                crv_reward = reward.get("apy", 0.0)
                 break
         pools.append(
             {
@@ -45,7 +45,7 @@ def fetch_pool_data() -> List[Dict[str, float]]:
                 "apy": apy,
                 "bribe": bribe,
                 "trading_fee": trading_fee,
-                "crv": crv,
+                "crv_reward": crv_reward,
             }
         )
     return pools

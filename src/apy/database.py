@@ -22,7 +22,7 @@ class PoolMetric(Base):
     apy = Column(Float)
     bribe = Column(Float)
     trading_fee = Column(Float)
-    crv = Column(Float)
+    crv_reward = Column(Float)
     recorded_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
