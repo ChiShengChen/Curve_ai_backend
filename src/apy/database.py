@@ -55,6 +55,24 @@ class DepositTransaction(Base):
     recorded_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
+class WithdrawalTransaction(Base):
+    """Record on-chain withdrawal transactions for a user."""
+
+    __tablename__ = "withdrawal_transactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, index=True, nullable=False)
+    amount = Column(Float, nullable=False)
+    asset = Column(String, nullable=False)
+    to_address = Column(String, nullable=False)
+    network = Column(String, nullable=False)
+    gas_fee = Column(Float, default=0.0)
+    net_received = Column(Float, nullable=False)
+    status = Column(String, default="pending")
+    tx_hash = Column(String, unique=True, index=True, nullable=False)
+    recorded_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 def init_db() -> None:
     """Create database tables if they do not exist."""
     Base.metadata.create_all(bind=engine)
