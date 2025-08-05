@@ -51,6 +51,45 @@ def _handle_service_error(session: Session, exc: Exception) -> None:
     raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+def get_pool_ids() -> List[str]:
+    """Return all distinct pool identifiers in the database."""
+
+    session: Session = SessionLocal()
+    try:
+        rows = session.query(PoolMetric.pool_id).distinct().all()
+        return [row[0] for row in rows]
+    except Exception as exc:
+        _handle_service_error(session, exc)
+    finally:
+        session.close()
+
+
+def get_pool_apy_history(
+    pool_id: str, start: datetime | None = None, end: datetime | None = None
+) -> List[PoolMetric]:
+    """Retrieve APY metrics for a pool within an optional date range."""
+
+    session: Session = SessionLocal()
+    try:
+        if start and end and start > end:
+            raise HTTPException(status_code=400, detail="start must be before end")
+
+        query = session.query(PoolMetric).filter(PoolMetric.pool_id == pool_id)
+        if start:
+            query = query.filter(PoolMetric.recorded_at >= start)
+        if end:
+            query = query.filter(PoolMetric.recorded_at <= end)
+
+        metrics = query.order_by(PoolMetric.recorded_at).all()
+        if not metrics:
+            raise HTTPException(status_code=404, detail="Pool not found")
+        return metrics
+    except Exception as exc:
+        _handle_service_error(session, exc)
+    finally:
+        session.close()
+
+
 def calculate_total_earning(user_id: str, pool_id: str, amount: float) -> Dict[str, float]:
     """Update user deposit and calculate projected earnings.
 

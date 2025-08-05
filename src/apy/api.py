@@ -30,6 +30,8 @@ from .services import (
     get_fund_deployments,
     create_risk_adjustment,
     get_risk_adjustments,
+    get_pool_ids,
+    get_pool_apy_history,
 )
 
 
@@ -111,7 +113,7 @@ class APYHistoryResponse(BaseModel):
 
     pool_id: str
     current: APYSnapshot
-    history: Dict[str, List[APYSnapshot]]
+    history: List[APYSnapshot]
 
 
 class YieldSourcesResponse(BaseModel):
@@ -324,6 +326,13 @@ class EarningsRequest(BaseModel):
     amount: confloat(gt=0) = Field(..., description="Amount to deposit")
 
 
+@app.get("/pools", response_model=List[str])
+def list_pools():
+    """Return all available pool identifiers."""
+
+    return get_pool_ids()
+
+
 def _get_metrics(session: Session, pool_id: str):
     """Retrieve latest metric and 7/30 day histories for a pool."""
 
@@ -356,10 +365,12 @@ def _get_metrics(session: Session, pool_id: str):
 
 
 @app.get("/pools/{pool_id}/apy", response_model=APYHistoryResponse)
-def get_pool_apy(pool_id: str, db: Session = Depends(get_db)):
+def get_pool_apy(
+    pool_id: str, start: datetime | None = None, end: datetime | None = None
+):
     """Return current APY and historical metrics for the given pool."""
 
-    latest, history7, history30 = _get_metrics(db, pool_id)
+    metrics = get_pool_apy_history(pool_id, start, end)
 
     def serialize(metric: PoolMetric) -> APYSnapshot:
         return APYSnapshot(
@@ -370,13 +381,11 @@ def get_pool_apy(pool_id: str, db: Session = Depends(get_db)):
             recorded_at=metric.recorded_at,
         )
 
+    latest = metrics[-1]
     return APYHistoryResponse(
         pool_id=pool_id,
         current=serialize(latest),
-        history={
-            "7d": [serialize(m) for m in history7],
-            "30d": [serialize(m) for m in history30],
-        },
+        history=[serialize(m) for m in metrics],
     )
 
 
