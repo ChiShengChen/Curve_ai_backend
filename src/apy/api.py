@@ -5,6 +5,9 @@ from typing import Dict, List, Generator
 
 import logging
 from fastapi import Depends, FastAPI, HTTPException, Request
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 from prometheus_client import Counter
 
 from pydantic import BaseModel, Field, confloat
@@ -30,10 +33,16 @@ from .services import (
 )
 
 
+limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(title=settings.api_title)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 init_db()
 
 logger = logging.getLogger(__name__)
+
+SENSITIVE_RATE_LIMIT = "5/minute"
+SENSITIVE_HOURLY_RATE_LIMIT = "100/hour"
 
 # Prometheus counter to track API requests by method, endpoint and status code
 REQUEST_COUNTER = Counter(
@@ -400,8 +409,10 @@ def get_yield_sources(pool_id: str, db: Session = Depends(get_db)):
     response_model=DepositResponse,
     dependencies=[Depends(verify_user)],
 )
+@limiter.limit(SENSITIVE_RATE_LIMIT)
+@limiter.limit(SENSITIVE_HOURLY_RATE_LIMIT)
 def post_user_deposit(
-    user_id: str, payload: DepositRequest, db: Session = Depends(get_db)
+    request: Request, user_id: str, payload: DepositRequest, db: Session = Depends(get_db)
 ):
     """Record a new deposit transaction for the user."""
 
@@ -437,8 +448,10 @@ def get_user_deposits(
     response_model=WithdrawalResponse,
     dependencies=[Depends(verify_user)],
 )
+@limiter.limit(SENSITIVE_RATE_LIMIT)
+@limiter.limit(SENSITIVE_HOURLY_RATE_LIMIT)
 def post_user_withdrawal(
-    user_id: str, payload: WithdrawalRequest, db: Session = Depends(get_db)
+    request: Request, user_id: str, payload: WithdrawalRequest, db: Session = Depends(get_db)
 ):
     """Record a new withdrawal transaction for the user."""
 
@@ -474,8 +487,10 @@ def get_user_withdrawals(
     response_model=DeploymentResponse,
     dependencies=[Depends(verify_user)],
 )
+@limiter.limit(SENSITIVE_RATE_LIMIT)
+@limiter.limit(SENSITIVE_HOURLY_RATE_LIMIT)
 def post_user_deployment(
-    user_id: str, payload: DeploymentRequest, db: Session = Depends(get_db)
+    request: Request, user_id: str, payload: DeploymentRequest, db: Session = Depends(get_db)
 ):
     """Record a new fund deployment for the user."""
 
@@ -534,8 +549,10 @@ def get_user_positions_endpoint(
     response_model=RebalanceActionResponse,
     dependencies=[Depends(verify_user)],
 )
+@limiter.limit(SENSITIVE_RATE_LIMIT)
+@limiter.limit(SENSITIVE_HOURLY_RATE_LIMIT)
 def post_user_rebalance(
-    user_id: str, payload: RebalanceActionRequest, db: Session = Depends(get_db)
+    request: Request, user_id: str, payload: RebalanceActionRequest, db: Session = Depends(get_db)
 ):
     """Record a new rebalance action for the user."""
 
@@ -573,8 +590,10 @@ def get_user_rebalances(
     response_model=RiskAdjustmentResponse,
     dependencies=[Depends(verify_user)],
 )
+@limiter.limit(SENSITIVE_RATE_LIMIT)
+@limiter.limit(SENSITIVE_HOURLY_RATE_LIMIT)
 def post_user_risk_adjustment(
-    user_id: str, payload: RiskAdjustmentRequest, db: Session = Depends(get_db)
+    request: Request, user_id: str, payload: RiskAdjustmentRequest, db: Session = Depends(get_db)
 ):
     """Record a new risk adjustment for the user."""
 
@@ -609,8 +628,10 @@ def get_user_risk_adjustments(
     "/users/{user_id}/earnings",
     dependencies=[Depends(verify_user)],
 )
+@limiter.limit(SENSITIVE_RATE_LIMIT)
+@limiter.limit(SENSITIVE_HOURLY_RATE_LIMIT)
 def post_user_earnings(
-    user_id: str, payload: EarningsRequest, db: Session = Depends(get_db)
+    request: Request, user_id: str, payload: EarningsRequest, db: Session = Depends(get_db)
 ) -> Dict[str, float]:
     """Record a user's deposit and return projected earnings."""
     return calculate_total_earning(user_id, payload.pool_id, payload.amount)
