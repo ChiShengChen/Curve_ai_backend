@@ -3,7 +3,9 @@
 from datetime import datetime, timedelta
 from typing import Dict, List, Generator
 
+import hashlib
 import logging
+import jwt
 from fastapi import Depends, FastAPI, HTTPException, Request
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -17,6 +19,7 @@ from sqlalchemy.orm import Session
 from .auth import verify_user
 from .config import settings
 from .database import SessionLocal, PoolMetric, init_db
+from .models.user import User
 from .services import (
     calculate_total_earning,
     get_user_positions,
@@ -324,6 +327,77 @@ class EarningsRequest(BaseModel):
 
     pool_id: str = Field(..., description="Pool identifier")
     amount: confloat(gt=0) = Field(..., description="Amount to deposit")
+
+
+class UserCreate(BaseModel):
+    """Request body for registering a new user."""
+
+    username: str
+    password: str
+    role: str = "user"
+
+
+class UserLogin(BaseModel):
+    """Request body for user login."""
+
+    username: str
+    password: str
+
+
+class TokenResponse(BaseModel):
+    """JWT access and refresh tokens."""
+
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+
+
+def hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode()).hexdigest()
+
+
+def _create_token(user: User, expires: timedelta, token_type: str) -> str:
+    payload = {"sub": user.username, "exp": datetime.utcnow() + expires, "type": token_type}
+    return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+
+
+def create_access_token(user: User) -> str:
+    return _create_token(user, timedelta(minutes=settings.access_token_expire_minutes), "access")
+
+
+def create_refresh_token(user: User) -> str:
+    return _create_token(user, timedelta(minutes=settings.refresh_token_expire_minutes), "refresh")
+
+
+@app.post("/register", response_model=TokenResponse)
+@limiter.limit(SENSITIVE_RATE_LIMIT)
+def register(request: Request, user: UserCreate, db: Session = Depends(get_db)):
+    if db.query(User).filter(User.username == user.username).first():
+        raise HTTPException(status_code=400, detail="Username already registered")
+    db_user = User(
+        username=user.username,
+        password_hash=hash_password(user.password),
+        role=user.role,
+    )
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return TokenResponse(
+        access_token=create_access_token(db_user),
+        refresh_token=create_refresh_token(db_user),
+    )
+
+
+@app.post("/login", response_model=TokenResponse)
+@limiter.limit(SENSITIVE_RATE_LIMIT)
+def login(request: Request, user: UserLogin, db: Session = Depends(get_db)):
+    db_user = db.query(User).filter(User.username == user.username).first()
+    if not db_user or db_user.password_hash != hash_password(user.password):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    return TokenResponse(
+        access_token=create_access_token(db_user),
+        refresh_token=create_refresh_token(db_user),
+    )
 
 
 @app.get("/pools", response_model=List[str])

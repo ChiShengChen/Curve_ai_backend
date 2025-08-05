@@ -1,11 +1,9 @@
 from datetime import datetime
 
-from fastapi.testclient import TestClient
-
 from apy.api import app
 
 
-def test_get_pool_apy(monkeypatch):
+def test_get_pool_apy(monkeypatch, client):
     now = datetime.utcnow()
 
     class DummyMetric:
@@ -21,7 +19,6 @@ def test_get_pool_apy(monkeypatch):
 
     monkeypatch.setattr("apy.api.get_pool_apy_history", fake_history)
 
-    client = TestClient(app)
     response = client.get("/pools/sample/apy")
     assert response.status_code == 200
     data = response.json()

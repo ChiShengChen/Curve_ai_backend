@@ -19,6 +19,7 @@ dependencies = [
     "alembic",
     "pydantic-settings",
     "slowapi",
+    "PyJWT",
 ]
 
 [project.optional-dependencies]
