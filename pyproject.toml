@@ -16,6 +16,8 @@ dependencies = [
     "celery",
     "redis",
     "prometheus-client",
+    "alembic",
+    "pydantic-settings",
 ]
 
 [tool.pytest.ini_options]
