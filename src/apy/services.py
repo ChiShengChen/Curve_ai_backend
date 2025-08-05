@@ -20,6 +20,7 @@ from .database import (
     RiskAdjustment,
 )
 from .apy_calc import calculate_compound_apy
+from .ai.model import PoolAPYModel, MODEL_PATH
 
 
 logger = logging.getLogger(__name__)
@@ -591,6 +592,91 @@ def get_risk_adjustments(
             .all()
         )
         return records, total
+    except Exception as exc:
+        _handle_service_error(session, exc)
+    finally:
+        session.close()
+
+
+def _load_trained_model() -> PoolAPYModel:
+    """Helper to load the persisted regression model."""
+    try:
+        return PoolAPYModel.load(MODEL_PATH)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=500, detail="model file not found") from exc
+
+
+def predict_pool_apy(pool_id: str) -> float:
+    """Predict the APY for the latest snapshot of the given pool."""
+
+    session: Session = SessionLocal()
+    try:
+        latest = (
+            session.query(PoolMetric)
+            .filter(PoolMetric.pool_id == pool_id)
+            .order_by(PoolMetric.recorded_at.desc())
+            .first()
+        )
+        if not latest:
+            raise HTTPException(status_code=404, detail="Pool not found")
+        features = [
+            latest.bribe or 0.0,
+            latest.trading_fee or 0.0,
+            latest.crv_reward or 0.0,
+        ]
+        model = _load_trained_model()
+        return model.predict(features)
+    except Exception as exc:
+        _handle_service_error(session, exc)
+    finally:
+        session.close()
+
+
+def suggest_rebalance(user_id: str) -> Dict[str, object]:
+    """Suggest a pool for the user based on predicted APYs."""
+
+    session: Session = SessionLocal()
+    try:
+        positions = (
+            session.query(UserPosition)
+            .filter(UserPosition.user_id == user_id)
+            .all()
+        )
+        if not positions:
+            raise HTTPException(status_code=404, detail="User has no positions")
+
+        pool_ids = [row[0] for row in session.query(PoolMetric.pool_id).distinct().all()]
+        model = _load_trained_model()
+
+        predictions: Dict[str, float] = {}
+        for pid in pool_ids:
+            latest = (
+                session.query(PoolMetric)
+                .filter(PoolMetric.pool_id == pid)
+                .order_by(PoolMetric.recorded_at.desc())
+                .first()
+            )
+            if not latest:
+                continue
+            features = [
+                latest.bribe or 0.0,
+                latest.trading_fee or 0.0,
+                latest.crv_reward or 0.0,
+            ]
+            predictions[pid] = model.predict(features)
+
+        best_pool = max(predictions, key=predictions.get)
+        top_position = max(positions, key=lambda p: p.amount)
+        current_pool = top_position.pool_id
+        current_pred = predictions.get(current_pool, 0.0)
+
+        return {
+            "user_id": user_id,
+            "current_pool": current_pool,
+            "current_predicted_apy": current_pred,
+            "recommended_pool": best_pool,
+            "recommended_apy": predictions[best_pool],
+        }
     except Exception as exc:
         _handle_service_error(session, exc)
     finally:

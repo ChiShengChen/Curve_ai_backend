@@ -35,6 +35,8 @@ from .services import (
     get_risk_adjustments,
     get_pool_ids,
     get_pool_apy_history,
+    predict_pool_apy,
+    suggest_rebalance,
 )
 
 
@@ -125,6 +127,23 @@ class YieldSourcesResponse(BaseModel):
     pool_id: str
     current: YieldComponent
     history: Dict[str, List[YieldComponent]]
+
+
+class APYPredictionResponse(BaseModel):
+    """Predicted APY for a pool."""
+
+    pool_id: str
+    predicted_apy: float
+
+
+class RebalanceSuggestionResponse(BaseModel):
+    """Suggested pool reallocation based on predicted APYs."""
+
+    user_id: str
+    current_pool: str
+    current_predicted_apy: float
+    recommended_pool: str
+    recommended_apy: float
 
 
 class DepositRequest(BaseModel):
@@ -487,6 +506,14 @@ def get_yield_sources(pool_id: str, db: Session = Depends(get_db)):
     )
 
 
+@app.get("/pools/{pool_id}/predicted-apy", response_model=APYPredictionResponse)
+def get_predicted_apy(pool_id: str) -> APYPredictionResponse:
+    """Predict the APY for the next period based on historical data."""
+    return APYPredictionResponse(
+        pool_id=pool_id, predicted_apy=predict_pool_apy(pool_id)
+    )
+
+
 @app.post(
     "/users/{user_id}/deposits",
     response_model=DepositResponse,
@@ -625,6 +652,18 @@ def get_user_positions_endpoint(
     """Return aggregated positions and earnings for the user."""
 
     return get_user_positions(user_id)
+
+
+@app.get(
+    "/users/{user_id}/rebalance-suggestion",
+    response_model=RebalanceSuggestionResponse,
+    dependencies=[Depends(verify_user)],
+)
+def get_rebalance_suggestion_endpoint(
+    user_id: str, db: Session = Depends(get_db)
+) -> RebalanceSuggestionResponse:
+    """Return a suggested pool allocation based on predicted APYs."""
+    return RebalanceSuggestionResponse(**suggest_rebalance(user_id))
 
 
 @app.post(
