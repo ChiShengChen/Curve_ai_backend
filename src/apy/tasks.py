@@ -21,7 +21,8 @@ METRIC_INSERT_COUNTER = Counter(
 )
 
 
-@celery_app.task(bind=True, autoretry_for=(Exception,), retry_backoff=True, retry_kwargs={"max_retries": 3})
+# Use manual retry handling to get finer control over exceptions
+@celery_app.task(bind=True, max_retries=3, default_retry_delay=60)
 def fetch_all_pool_metrics(self) -> int:
     """Fetch metrics for all pools and store them in the database.
 
@@ -41,34 +42,39 @@ def fetch_all_pool_metrics(self) -> int:
         logger.debug("Index creation skipped", exc_info=True)
 
     try:
-        count = 0
+        inserted = 0
+        updated = 0
         now = datetime.utcnow()
-        dedupe_window = timedelta(minutes=5)
 
         for metric in pool_metrics:
+            # allow incoming data to provide its own timestamp, defaulting to now
+            recorded_at = metric.get("recorded_at", now)
             existing = (
                 session.query(PoolMetric)
                 .filter(
                     PoolMetric.pool_id == metric["pool_id"],
-                    PoolMetric.recorded_at >= now - dedupe_window,
-                    PoolMetric.recorded_at <= now + dedupe_window,
+                    PoolMetric.recorded_at == recorded_at,
                 )
                 .first()
             )
             if existing:
-                continue
-
-            session.add(
-                PoolMetric(
-                    pool_id=metric["pool_id"],
-                    apy=metric.get("apy"),
-                    bribe=metric.get("bribe"),
-                    trading_fee=metric.get("trading_fee"),
-                    crv_reward=metric.get("crv_reward"),
-                    recorded_at=now,
+                existing.apy = metric.get("apy")
+                existing.bribe = metric.get("bribe")
+                existing.trading_fee = metric.get("trading_fee")
+                existing.crv_reward = metric.get("crv_reward")
+                updated += 1
+            else:
+                session.add(
+                    PoolMetric(
+                        pool_id=metric["pool_id"],
+                        apy=metric.get("apy"),
+                        bribe=metric.get("bribe"),
+                        trading_fee=metric.get("trading_fee"),
+                        crv_reward=metric.get("crv_reward"),
+                        recorded_at=recorded_at,
+                    )
                 )
-            )
-            count += 1
+                inserted += 1
 
         # Optional cleanup of old metrics
         retention_days = int(os.getenv("POOL_METRIC_RETENTION_DAYS", "30"))
@@ -77,9 +83,9 @@ def fetch_all_pool_metrics(self) -> int:
             session.query(PoolMetric).filter(PoolMetric.recorded_at < expiry).delete()
 
         session.commit()
-        METRIC_INSERT_COUNTER.inc(count)
-        logger.info("inserted %d pool metrics", count)
-        return count
+        METRIC_INSERT_COUNTER.inc(inserted)
+        logger.info("inserted %d and updated %d pool metrics", inserted, updated)
+        return inserted
     except Exception as exc:  # pragma: no cover - executed on failure
         session.rollback()
         logger.exception("Failed to fetch/store pool metrics")
