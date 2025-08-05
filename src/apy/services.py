@@ -6,7 +6,6 @@ from typing import Dict, List, Tuple
 
 from fastapi import HTTPException
 from prometheus_client import Counter
-from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -20,6 +19,7 @@ from .database import (
     FundDeployment,
     RiskAdjustment,
 )
+from .apy_calc import calculate_compound_apy
 
 
 logger = logging.getLogger(__name__)
@@ -137,13 +137,16 @@ def calculate_total_earning(user_id: str, pool_id: str, amount: float) -> Dict[s
 
         total_amount = position.amount
 
-        # Historical APY: average across all records for the pool
-        avg_apy = (
-            session.query(func.avg(PoolMetric.apy))
+        # Historical APY: compounded across all records for the pool
+        rows = (
+            session.query(PoolMetric.apy)
             .filter(PoolMetric.pool_id == pool_id)
-            .scalar()
-        ) or 0.0
-        projected_earning = total_amount * (avg_apy / 100)
+            .order_by(PoolMetric.recorded_at)
+            .all()
+        )
+        apy_series = [r[0] for r in rows if r[0] is not None]
+        compounded_apy = calculate_compound_apy(apy_series)
+        projected_earning = total_amount * (compounded_apy / 100)
 
         # Current APR from latest snapshot
         latest = (
@@ -200,12 +203,15 @@ def get_user_positions(user_id: str) -> Dict[str, object]:
         total_earning = 0.0
 
         for pos in positions:
-            avg_apy = (
-                session.query(func.avg(PoolMetric.apy))
+            rows = (
+                session.query(PoolMetric.apy)
                 .filter(PoolMetric.pool_id == pos.pool_id)
-                .scalar()
-            ) or 0.0
-            projected = pos.amount * (avg_apy / 100)
+                .order_by(PoolMetric.recorded_at)
+                .all()
+            )
+            apy_series = [r[0] for r in rows if r[0] is not None]
+            compounded_apy = calculate_compound_apy(apy_series)
+            projected = pos.amount * (compounded_apy / 100)
 
             latest = (
                 session.query(PoolMetric)
