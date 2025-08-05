@@ -90,3 +90,11 @@ Start the Celery worker with beat enabled:
 ```bash
 celery -A apy.worker.celery_app worker --beat
 ```
+
+## Database Migrations
+
+Alembic manages schema changes. To apply the latest migrations run:
+
+```bash
+alembic upgrade head
+```
