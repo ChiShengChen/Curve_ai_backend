@@ -21,6 +21,7 @@ from .database import (
 )
 from .apy_calc import calculate_compound_apy
 from .ai.model import PoolAPYModel, MODEL_PATH
+from .blockchain import verify_transaction
 
 
 logger = logging.getLogger(__name__)
@@ -263,6 +264,12 @@ def create_deposit_transaction(
     )
     session: Session = SessionLocal()
     try:
+        # Verify the transaction on-chain before recording it.  This prevents
+        # storing bogus hashes and ensures the transaction has actually been
+        # mined successfully.
+        if not verify_transaction(tx_hash, network):
+            raise ValueError("transaction not found or not confirmed")
+
         deposit = DepositTransaction(
             user_id=user_id,
             amount=amount,
@@ -328,6 +335,11 @@ def create_withdrawal_transaction(
     )
     session: Session = SessionLocal()
     try:
+        # Validate the on-chain transaction prior to recording to avoid
+        # persisting invalid or pending withdrawals.
+        if not verify_transaction(tx_hash, network):
+            raise ValueError("transaction not found or not confirmed")
+
         withdrawal = WithdrawalTransaction(
             user_id=user_id,
             amount=amount,
