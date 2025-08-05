@@ -18,6 +18,7 @@ dependencies = [
     "prometheus-client",
     "alembic",
     "pydantic-settings",
+    "slowapi",
 ]
 
 [tool.pytest.ini_options]
